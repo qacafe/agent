@@ -38,7 +38,8 @@ import logging
 
 from agent import utils
 from agent import agent_db
-from agent import usp_pb2 as usp
+from agent import usp_msg_pb2 as usp
+from agent import usp_record_pb2 as usp_record
 
 
 TAKE_PICTURE_CAMERA_OP = "Device.Services.HomeAutomation.1.Camera.1.TakePicture()"
@@ -58,12 +59,18 @@ class UspRequestHandler(object):
         self._logger = logging.getLogger(self.__class__.__name__)
 
 
-    def handle_request(self, msg_payload):
+    def handle_request(self, record_payload):
         """Handle a Request/Response interaction"""
+        req_rec = usp_record.Record()
+
+        # De-Serialize the record
+        req_rec.ParseFromString(record_payload)
+
         req = usp.Msg()
 
         # De-Serialize the payload
-        req.ParseFromString(msg_payload)
+        req.ParseFromString(req_rec.no_session_context.payload)
+
         self._logger.debug("Incoming payload parsed via Protocol Buffers")
 
         if self._debug:
@@ -71,11 +78,11 @@ class UspRequestHandler(object):
 
         try:
             # Validate the payload before processing it
-            self._validate_request(req)
+            self._validate_request(req_rec, req)
             self._logger.info("Received a [%s] Request",
                               req.body.request.WhichOneof("req_type"))
 
-            resp = self._process_request(req)
+            resp_rec, resp = self._process_request(req_rec, req)
             if self._debug:
                 print("Outgoing Response:\n{}".format(resp))
         except ProtocolValidationError as err:
@@ -83,10 +90,12 @@ class UspRequestHandler(object):
             self._logger.error("%s", err_msg)
             raise ProtocolViolationError(err_msg)
 
-        return req, resp, resp.SerializeToString()
+        resp_rec.no_session_context.payload = resp.SerializeToString()
+
+        return req_rec, req, resp_rec, resp, resp_rec.SerializeToString()
 
 
-    def _validate_request(self, req):
+    def _validate_request(self, req_rec, req):
         """Validate the incoming message"""
         if not req.IsInitialized():
             raise ProtocolValidationError("Request missing Required Fields")
@@ -94,16 +103,16 @@ class UspRequestHandler(object):
         if len(req.header.msg_id) <= 0:
             raise ProtocolValidationError("Header missing msg_id")
 
-        if len(req.header.proto_version) <= 0:
-            raise ProtocolValidationError("Header missing proto_version")
+        if len(req_rec.version) <= 0:
+            raise ProtocolValidationError("Header missing version")
 
-        if len(req.header.to_id) <= 0:
+        if len(req_rec.to_id) <= 0:
             raise ProtocolValidationError("Header missing to_id")
 
-        if req.header.to_id != self._id:
+        if req_rec.to_id != self._id:
             raise ProtocolValidationError("Incorrect to_id")
 
-        if len(req.header.from_id) <= 0:
+        if len(req_rec.from_id) <= 0:
             raise ProtocolValidationError("Header missing from_id")
 
         if not req.body.WhichOneof("msg_body") == "request":
@@ -111,9 +120,9 @@ class UspRequestHandler(object):
 
         self._logger.info("Incoming request passed validation")
 
-    def _process_request(self, req):
+    def _process_request(self, req_rec, req):
         """Processing the incoming Message and return a Response"""
-        to_id = req.header.from_id
+        to_id = req_rec.from_id
         err_msg = "Message Failure: Request body does not match Header msg_type"
         usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
         resp = usp_err_msg.generate_error(9000, err_msg)
@@ -121,40 +130,45 @@ class UspRequestHandler(object):
         if req.header.msg_type == usp.Header.GET:
             # Validate that the Request body matches the Header's msg_type
             if req.body.request.WhichOneof("req_type") == "get":
-                resp = self._process_get(req)
+                resp_rec, resp = self._process_get(req_rec, req)
 #        elif req.header.msg_type == usp.Header.GET_INSTANCES:
 #            # Validate that the Request body matches the Header's msg_type
 #            if req.body.request.WhichOneof("req_type") == "get_instances":
-#                resp = self._process_get_instances(req)
+#                resp_rec, resp = self._process_get_instances(req_rec, req)
 #        elif req.header.msg_type == usp.Header.GET_IMPL_OBJECTS:
 #            # Validate that the Request body matches the Header's msg_type
 #            if req.body.request.WhichOneof("req_type") == "get_impl_objects":
-#                resp = self._process_get_impl_objects(req)
+#                resp_rec, resp = self._process_get_impl_objects(req_rec, req)
         elif req.header.msg_type == usp.Header.SET:
             # Validate that the Request body matches the Header's msg_type
             if req.body.request.WhichOneof("req_type") == "set":
-                resp = self._process_set(req)
+                resp_rec, resp = self._process_set(req_rec, req)
         elif req.header.msg_type == usp.Header.OPERATE:
             # Validate that the Request body matches the Header's msg_type
             if req.body.request.WhichOneof("req_type") == "operate":
-                resp = self._process_operation(req)
+                resp_rec, resp = self._process_operation(req_rec, req)
+        elif req.header.msg_type == usp.Header.GET_SUPPORTED_PROTO:
+            # Validate that the Request body matches the Header's msg_type
+            if req.body.request.WhichOneof("req_type") == "get_supported_protocol":
+                resp_rec, resp = self._process_get_supported_protocol(req_rec, req)
         else:
             err_msg = "Invalid USP Message: unknown command"
-            resp = usp_err_msg.generate_error(9000, err_msg)
+            resp_rec, resp = usp_err_msg.generate_error(9000, err_msg)
 
-        return resp
+        return resp_rec, resp
 
-    def _process_get(self, req):
+    def _process_get(self, req_rec, req):
         """Process an incoming Get and generate a GetResp"""
+        resp_rec = usp_record.Record()
         resp = usp.Msg()
         path_result_list = []
         self._logger.info("Processing a Get Request...")
 
         # Populate the Response's Header information
-        self._populate_resp_header(req, resp, usp.Header.GET_RESP)
+        self._populate_resp_header(req_rec, req, resp_rec, resp, usp.Header.GET_RESP)
 
         # Process the Parameter Paths in the Get Request
-        for req_path in req.body.request.get.param_path_list:
+        for req_path in req.body.request.get.param_paths:
             path_result = usp.GetResp.RequestedPathResult()
             path_result.requested_path = req_path
 
@@ -174,14 +188,14 @@ class UspRequestHandler(object):
 
                         for item in items:
                             param_path = self._diff_paths(affected_path, item)
-                            resolved_path_result.result_param_map[param_path] = str(self._db.get(item))
+                            resolved_path_result.result_params[param_path] = str(self._db.get(item))
                     else:
                         param = affected_path + param_name
-                        resolved_path_result.result_param_map[param_name] = str(self._db.get(param))
+                        resolved_path_result.result_params[param_name] = str(self._db.get(param))
 
                     resolved_path_list.append(resolved_path_result)
 
-                path_result.resolved_path_result_list.extend(resolved_path_list)
+                path_result.resolved_path_results.extend(resolved_path_list)
             except agent_db.NoSuchPathError:
                 self._logger.warning("Invalid Path encountered: %s", req_path)
                 path_result.err_code = 11002
@@ -189,52 +203,55 @@ class UspRequestHandler(object):
 
             path_result_list.append(path_result)
 
-        resp.body.response.get_resp.req_path_result_list.extend(path_result_list)
+        resp.body.response.get_resp.req_path_results.extend(path_result_list)
 
-        return resp
+        return resp_rec, resp
 
-    def _process_get_instances(self, req):
+    def _process_get_instances(self, req_rec, req):
         """Process an incoming GetInstances and generate a GetInstancesResp"""
         # TODO: GetInstances is back!  Make sure this code works for the new version of it
         pass
         """
+        resp_rec = usp_record.Record()
         resp = usp.Msg()
         path_result_list = []
         self._logger.info("Processing a GetInstances Request...")
 
         # Populate the Response's Header information
-        self._populate_resp_header(req, resp, usp.Header.GET_INSTANCES_RESP)
+        self._populate_resp_header(req_rec, req, resp_rec, resp, usp.Header.GET_INSTANCES_RESP)
 
         # Process the Parameter Paths in the GetInstances Request
-        for req_path in req.body.request.get_instances.obj_path:
+        for req_path in req.body.request.get_instances.obj_paths:
             path_result = usp.GetInstancesResp.RequestedPathResult()
             path_result.requested_path = req_path
 
             try:
                 items = self._db.find_instances(req_path)
-                path_result.result_path_list.extend(items)
+                path_result.curr_insts.extend(items)
             except agent_db.NoSuchPathError:
                 self._logger.warning("Invalid Path encountered: %s", req_path)
-                path_result.invalid_path = True
+                path_result.err_code = 9000
+                path_result.err_msg = "invalid path encountered '{}'".format(req_path)
 
             path_result_list.append(path_result)
 
-        resp.body.response.get_instances_resp.req_path_result.extend(path_result_list)
+        resp.body.response.get_instances_resp.req_path_results.extend(path_result_list)
 
-        return resp
+        return resp_rec, resp
         """
 
-    def _process_get_impl_objects(self, req):
+    def _process_get_impl_objects(self, req_rec, req):
         """Process an incoming GetImplObjects and generate a GetImplObjectsResp"""
         # TODO: GetImplObjects was replaced with GetSupportedDM; how much of this can be reused?
         pass
         """
+        resp_rec = usp_record.Record()
         resp = usp.Msg()
         path_result_list = []
         self._logger.info("Processing a GetImplObjects Request...")
 
         # Populate the Response's Header information
-        self._populate_resp_header(req, resp, usp.Header.GET_IMPL_OBJECTS_RESP)
+        self._populate_resp_header(req_rec, req, resp_rec, resp, usp.Header.GET_IMPL_OBJECTS_RESP)
 
         # Process the Parameter Paths in the GetImplObjects Request
         for req_impl_obj in req.body.request.get_impl_objects.impl_obj:
@@ -245,7 +262,7 @@ class UspRequestHandler(object):
 
             try:
                 items = self._db.find_impl_objects(req_path, next_level)
-                path_result.result_path_list.extend(items)
+                path_result.result_paths.extend(items)
             except agent_db.NoSuchPathError:
                 self._logger.warning("Invalid Path encountered: %s", req_path)
                 path_result.invalid_path = True
@@ -254,36 +271,37 @@ class UspRequestHandler(object):
 
         resp.body.response.get_impl_objects_resp.req_path_result.extend(path_result_list)
 
-        return resp
+        return resp_rec, resp
         """
 
-    def _process_set(self, req):
+    def _process_set(self, req_rec, req):
         """Process an incoming Set and generate a SetResp"""
+        resp_rec = usp_record.Record()
         resp = usp.Msg()
         path_to_set_dict = {}
         update_obj_result_list = []
         set_failure_param_err_list = []
 
         # Populate the Response's Header information
-        self._populate_resp_header(req, resp, usp.Header.SET_RESP)
+        self._populate_resp_header(req_rec, req, resp_rec, resp, usp.Header.SET_RESP)
 
         # Validate the Set Request and populate the dictionaries and lists appropriately
         self._validate_set(req, path_to_set_dict, update_obj_result_list, set_failure_param_err_list)
 
         # Finished with all validation, process the errors or make the updates
         if len(set_failure_param_err_list) > 0:
-            usp_err_msg = utils.UspErrMsg(req.header.msg_id, req.header.from_id, self._id)
+            usp_err_msg = utils.UspErrMsg(req.header.msg_id, req_rec.from_id, self._id)
             err_msg = "Invalid Path Found, Allow Partial Updates = False :: Fail the entire Set"
             resp = usp_err_msg.generate_error(9000, err_msg)
-            resp.body.error.param_err_list.extend(set_failure_param_err_list)
+            resp.body.error.param_errs.extend(set_failure_param_err_list)
         else:
             # Process the Updates against the database
             for param_path in path_to_set_dict:
                 self._db.update(param_path, path_to_set_dict[param_path])
 
-            resp.body.response.set_resp.updated_obj_result_list.extend(update_obj_result_list)
+            resp.body.response.set_resp.updated_obj_results.extend(update_obj_result_list)
 
-        return resp
+        return resp_rec, resp
 
     def _validate_set(self, req, path_to_set_dict, update_obj_result_list, set_failure_param_err_list):
         """Validate the Set Request"""
@@ -291,7 +309,7 @@ class UspRequestHandler(object):
         allow_partial_updates = req.body.request.set.allow_partial
 
         # Loop through each UpdateObject
-        for obj_to_update in req.body.request.set.update_obj_list:
+        for obj_to_update in req.body.request.set.update_objs:
             update_inst_result_list = []
             obj_path_set_failure_err_dict = {}
             obj_path_to_update = obj_to_update.obj_path
@@ -313,7 +331,7 @@ class UspRequestHandler(object):
                     # If there were no Set Failure errors for the obj_to_update, oper_success
                     update_obj_result = usp.SetResp.UpdatedObjectResult()
                     update_obj_result.requested_path = obj_path_to_update
-                    update_obj_result.oper_status.oper_success.updated_inst_result_list.extend(update_inst_result_list)
+                    update_obj_result.oper_status.oper_success.updated_inst_results.extend(update_inst_result_list)
                     update_obj_result_list.append(update_obj_result)
                 else:
                     self._handle_set_param_errors(obj_path_to_update, allow_partial_updates,
@@ -331,7 +349,7 @@ class UspRequestHandler(object):
         update_inst_result.affected_path = affected_path
 
         # Loop through each parameter to validate it
-        for param_to_update in obj_to_update.param_setting_list:
+        for param_to_update in obj_to_update.param_settings:
             err_msg = ""
             param_failure = False
             param_path = affected_path + param_to_update.param
@@ -346,7 +364,7 @@ class UspRequestHandler(object):
                     else:
                         self._logger.info("Ignoring %s: same value as current", param_path)
 
-                    update_inst_result.updated_param_map[param_to_update.param] = value_to_set
+                    update_inst_result.updated_params[param_to_update.param] = value_to_set
                 else:
                     param_failure = True
                     err_msg = "Parameter is not writable"
@@ -365,7 +383,10 @@ class UspRequestHandler(object):
                 else:
                     param_err_list.append(param_err)
 
-        update_inst_result.param_err_list.extend(param_err_list)
+        if len(param_err_list) > 0:
+            update_inst_result = usp.SetResp.UpdatedInstanceFailure()
+            update_inst_result.affected_path = affected_path
+            update_inst_result.param_errs.extend(param_err_list)
 
         return set_failure_err_list, update_inst_result
 
@@ -394,7 +415,7 @@ class UspRequestHandler(object):
                 failure.param_err_list.extend(param_err_list)
                 failure_list.append(failure)
 
-            update_obj_result.oper_status.oper_failure.updated_inst_failure_list.extend(failure_list)
+            update_obj_result.oper_status.oper_failure.updated_inst_failures.extend(failure_list)
             update_obj_result_list.append(update_obj_result)
         else:
             # Set Failures are handled via ParamError on an Error message
@@ -424,8 +445,9 @@ class UspRequestHandler(object):
             set_failure_param_err.err_msg = sv_err.get_error_message()
             set_failure_param_err_list.append(set_failure_param_err)
 
-    def _process_operation(self, req):
+    def _process_operation(self, req_rec, req):
         """Process an incoming Operate and generate a OperateResp"""
+        resp_rec = usp_record.Record()
         resp = usp.Msg()
         op_result_list = []
         command = req.body.request.operate.command
@@ -435,42 +457,71 @@ class UspRequestHandler(object):
         #TODO: This is hard-coded for the Camera, but needs to be dynamic
 
         # Populate the Response's Header information
-        self._populate_resp_header(req, resp, usp.Header.OPERATE_RESP)
+        self._populate_resp_header(req_rec, req, resp_rec, resp, usp.Header.OPERATE_RESP)
 
         if product_class == "RPi_Camera" or product_class == "RPiZero_Camera":
             # Validate that the Operate.command is supported
             if command == TAKE_PICTURE_CAMERA_OP:
                 op_result = usp.OperateResp.OperationResult()
-                out_arg_map = op_result.req_output_args.output_arg_map
+                op_result.executed_command = req.body.request.operate.command
+                out_arg_map = op_result.req_output_args.output_args
                 camera = self._service_map[product_class]
                 param_map = camera.take_picture()
                 for param in param_map:
                     out_arg_map[param] = param_map[param]
 
                 op_result_list.append(op_result)
-                resp.body.response.operate_resp.operation_result_list.extend(op_result_list)
+                resp.body.response.operate_resp.operation_results.extend(op_result_list)
             else:
                 # Invalid Command - return an Error
-                to_id = req.header.from_id
+                to_id = req_rec.from_id
                 err_msg = "Operate Failure: invalid command - {}".format(command)
                 usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
                 resp = usp_err_msg.generate_error(9000, err_msg)
         else:
             # Unknown agent product class - return an Error
-            to_id = req.header.from_id
+            to_id = req_rec.from_id
             err_msg = "Operate Failure: unknown product class - {}".format(product_class)
             usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
             resp = usp_err_msg.generate_error(9000, err_msg)
 
-        return resp
+        return resp_rec, resp
 
-    def _populate_resp_header(self, req, resp, msg_type):
+    def _process_get_supported_protocol(self, req_rec, req):
+        """Process an incoming GetSupportedProtocol and generate a GetSupportedProtocolResp"""
+        resp_rec = usp_record.Record()
+        resp = usp.Msg()
+        agent_versions_list = ["1.0"]
+        self._logger.info("Processing a GetSupportedProtocol Request...")
+
+        # Populate the Response's Header information
+        self._populate_resp_header(req_rec, req, resp_rec, resp, usp.Header.GET_SUPPORTED_PROTO_RESP)
+
+        # Process the supported versions in the GetSupportedProtocol Request
+
+        version_compatible = False
+        for version in req.body.request.get_supported_protocol.controller_supported_protocol_versions:
+            if version == "1.0":
+                version_compatible = True
+                break
+
+        if version_compatible == False:
+            to_id = req_rec.from_id
+            err_msg = "GetSupportedProtocol Failure: incompatible versions"
+            usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
+            resp = usp_err_msg.generate_error(9000, err_msg)
+
+        resp.body.response.get_supported_protocol_resp.agent_supported_protocol_versions.extend(agent_versions_list)
+
+        return resp_rec, resp
+
+    def _populate_resp_header(self, req_rec, req, resp_rec, resp, msg_type):
         """Populate the Response's Header Information"""
         resp.header.msg_id = req.header.msg_id
         resp.header.msg_type = msg_type
-        resp.header.proto_version = "1.0"
-        resp.header.to_id = req.header.from_id
-        resp.header.from_id = self._id
+        resp_rec.version = "1.0"
+        resp_rec.to_id = req_rec.from_id
+        resp_rec.from_id = self._id
         # Responses don't get responses, so no need for reply_to_id
 
     def _split_path(self, path):

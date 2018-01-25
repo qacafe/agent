@@ -39,7 +39,8 @@ SOFTWARE.
 import logging
 
 from agent import utils
-from agent import usp_pb2 as usp
+from agent import usp_msg_pb2 as usp
+from agent import usp_record_pb2 as usp_record
 
 
 
@@ -57,13 +58,13 @@ class Notification(object):
         """Generate an appropriate USP Notification"""
         raise NotImplementedError()
 
-    def _init_notif(self, notif, send_resp=False):
+    def _init_notif(self, rec, notif, send_resp=False):
         """Set the Header Information of the Notification"""
         notif.header.msg_id = utils.MessageIdHelper.get_message_id()
         notif.header.msg_type = usp.Header.NOTIFY
-        notif.header.proto_version = "1.0"
-        notif.header.to_id = self._to_id
-        notif.header.from_id = self._from_id
+        rec.version = "1.0"
+        rec.to_id = self._to_id
+        rec.from_id = self._from_id
 
         notif.body.request.notify.subscription_id = self._subscription_id
         notif.body.request.notify.send_resp = send_resp
@@ -81,9 +82,10 @@ class BootNotification(Notification):
     def generate_notif_msg(self):
         """Generate an appropriate USP Notification"""
         map_as_str = ""
+        rec = usp_record.Record()
         notif = usp.Msg()
         first_entry = True
-        self._init_notif(notif)
+        self._init_notif(rec, notif)
 
         # TODO: Replace hard-coded list with data model driven list
         boot_param_list = ["Device.DeviceInfo.ManufacturerOUI",
@@ -93,8 +95,8 @@ class BootNotification(Notification):
 
         notif.body.request.notify.event.obj_path = "Device.LocalAgent."
         notif.body.request.notify.event.event_name = "Boot!"
-        notif.body.request.notify.event.param_map["CommandKey"] = ""
-        notif.body.request.notify.event.param_map["Cause"] = "LocalReboot"
+        notif.body.request.notify.event.params["CommandKey"] = ""
+        notif.body.request.notify.event.params["Cause"] = "LocalReboot"
 
         for path in boot_param_list:
             value = self._db.get(path)
@@ -112,8 +114,10 @@ class BootNotification(Notification):
                 map_as_str += "\"\""
                 self._logger.warning("Boot Param [%s] is None", path)
 
-        notif.body.request.notify.event.param_map["BootParameterMap"] = map_as_str
-        return notif
+        notif.body.request.notify.event.params["BootParameterMap"] = map_as_str
+
+        rec.no_session_context.payload = notif.SerializeToString()
+        return rec, notif
 
 
 
@@ -128,13 +132,15 @@ class ValueChangeNotification(Notification):
 
     def generate_notif_msg(self):
         """Generate an appropriate USP Notification"""
+        rec = usp_record.Record()
         notif = usp.Msg()
-        self._init_notif(notif)
+        self._init_notif(rec, notif)
 
         notif.body.request.notify.value_change.param_path = self._param
         notif.body.request.notify.value_change.param_value = str(self._value)
 
-        return notif
+        rec.no_session_context.payload = notif.SerializeToString()
+        return rec, notif
 
 
 
@@ -148,10 +154,12 @@ class PeriodicNotification(Notification):
 
     def generate_notif_msg(self):
         """Generate an appropriate USP Notification"""
+        rec = usp_record.Record()
         notif = usp.Msg()
-        self._init_notif(notif)
+        self._init_notif(rec, notif)
 
         notif.body.request.notify.event.obj_path = "Device.LocalAgent."
         notif.body.request.notify.event.event_name = "Periodic!"
 
-        return notif
+        rec.no_session_context.payload = notif.SerializeToString()
+        return rec, notif

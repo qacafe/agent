@@ -343,11 +343,11 @@ class BindingListener(threading.Thread):
         resp = None
 
         try:
-            req, resp, serialized_resp = self._msg_handler.handle_request(queue_item.get_payload())
+            req_rec, req, resp_rec, resp, serialized_resp = self._msg_handler.handle_request(queue_item.get_payload())
 
             to_addr = queue_item.get_reply_to_addr()
             if to_addr is not None:
-                self._log_messages(req, resp, to_addr)
+                self._log_messages(req_rec, req, resp_rec, resp, to_addr)
                 self._binding.send_msg(serialized_resp, to_addr)
             else:
                 self._logger.warning("Response not sent because an address could not be determined!")
@@ -359,10 +359,10 @@ class BindingListener(threading.Thread):
 
         return resp
 
-    def _log_messages(self, req, resp, to_addr):
+    def _log_messages(self, req_rec, req, resp_rec, resp, to_addr):
         """Logging Helper Static Method"""
         self._logger.info("Handled a [%s] Request from Endpoint ID [%s]",
-                          req.body.request.WhichOneof("req_type"), req.header.from_id)
+                          req.body.request.WhichOneof("req_type"), req_rec.from_id)
 
         if resp.body.HasField("response"):
             self._logger.info("Sending a [%s] Response to Endpoint Address [%s]",
@@ -495,9 +495,9 @@ class NotificationSender(threading.Thread):
         """Initialize the Notification Sender"""
         self._binding = binding
         self._to_addr = to_addr
-        self._msg = notif.generate_notif_msg()
+        self._rec, self._msg = notif.generate_notif_msg()
         threading.Thread.__init__(self, name="NotificationSender" + self._msg.body.request.notify.subscription_id)
 
     def run(self):
         """Thread execution code - send the Notification"""
-        self._binding.send_msg(self._msg.SerializeToString(), self._to_addr)
+        self._binding.send_msg(self._rec.SerializeToString(), self._to_addr)

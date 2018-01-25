@@ -40,7 +40,8 @@ import random
 import datetime
 import subprocess
 
-from agent import usp_pb2 as usp
+from agent import usp_msg_pb2 as usp
+from agent import usp_record_pb2 as usp_record
 
 
 
@@ -88,14 +89,15 @@ class UspErrMsg(object):
         self._to_id = to_id
         self._from_id = from_id
         self._msg = usp.Msg()
+        self._record = usp_record.Record()
 
 
     def _populate_header(self):
         """Populate the Header of the USP Message"""
         self._msg.header.msg_id = self._msg_id
-        self._msg.header.proto_version = "1.0"
-        self._msg.header.to_id = self._to_id
-        self._msg.header.from_id = self._from_id
+        self._record.version = "1.0"
+        self._record.to_id = self._to_id
+        self._record.from_id = self._from_id
 
 
     def generate_error(self, error_code, error_message):

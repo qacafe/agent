@@ -67,7 +67,13 @@ class MyStompConnListener(stomp.ConnectionListener):
         if "content-type" in headers:
             self._logger.debug("Validating the STOMP Headers for 'content-type'")
 
-            if headers["content-type"].startswith("application/vnd.bbf.usp.msg"):
+            if headers["media-type"] == "vnd.bbf.usp.msg":
+                self._logger.debug("STOMP Message has a proper 'media-type'")
+            else :
+                self._logger.warning("Incoming STOMP message contained an Unsupported Media-Type: %s",
+                                     headers["media-type"])
+
+            if headers["content-type"].startswith("application/octet-stream"):
                 self._logger.debug("STOMP Message has a proper 'content-type'")
 
                 if "reply-to-dest" in headers:
@@ -107,8 +113,8 @@ class StompUspBinding(generic_usp_binding.GenericUspBinding):
 
     def send_msg(self, serialized_msg, to_addr):
         """Send the ProtoBuf Serialized message to the provided STOMP address"""
-        content_type = "application/vnd.bbf.usp.msg"
-        usp_headers = {"reply-to-dest": self._my_dest}
+        content_type = "application/octet-stream"
+        usp_headers = {"reply-to-dest": self._my_dest, "media-type": "vnd.bbf.usp.msg"}
         self._logger.debug("Using [%s] as the value of the reply-to-dest header", self._my_dest)
         self._conn.send(to_addr, serialized_msg, content_type, usp_headers)
         self._logger.info("Sending a STOMP message to the following address: %s", to_addr)

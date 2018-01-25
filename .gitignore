@@ -8,6 +8,7 @@ tests/__pycache__/
 
 # Ignore IDE files
 .idea/
+TAGS
 
 # Ignore distribution files
 dist/
@@ -28,9 +29,6 @@ database/*.db-orig-proxy
 
 # Ignore the pictures
 pictures/
-
-# Ignore Protocol Buffers generated code
-agent/*_pb2.py
 
 # Ignore MAC Special Files
 .DS_Store

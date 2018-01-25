@@ -316,11 +316,11 @@ class StompPeriodicNotifHandler(abstract_agent.AbstractPeriodicNotifHandler):
             # Ensure the Controller Endpoint ID is known
             if self._to_id in self._controller_dest_dict:
                 to_addr = self._controller_dest_dict[self._to_id]
-                msg = notif.generate_notif_msg()
+                rec, msg = notif.generate_notif_msg()
 
                 self._logger.info("Sending a Periodic Notification to ID [%s] over MTP [%s] at: %s",
                                   self._to_id, self._mtp_param_path, to_addr)
-                self._binding.send_msg(msg.SerializeToString(), to_addr)
+                self._binding.send_msg(rec.SerializeToString(), to_addr)
             else:
                 self._logger.warning("Could not send a Periodic Notification to an unknown Controller [%s]",
                                      self._to_id)
@@ -369,12 +369,12 @@ class StompValueChangeNotifPoller(abstract_agent.AbstractValueChangeNotifPoller)
             # Ensure the Controller Endpoint ID is known
             if to_id in self._controller_dest_dict:
                 to_addr = self._controller_dest_dict[to_id]
-                msg = notif.generate_notif_msg()
+                rec, msg = notif.generate_notif_msg()
                 binding = self._binding_dict[controller_stomp_conn]
 
                 self._logger.info("Sending a ValueChange Notification to Controller [%s] over MTP [%s] at: %s",
                                   to_id, mtp_param_path, to_addr)
-                binding.send_msg(msg.SerializeToString(), to_addr)
+                binding.send_msg(rec.SerializeToString(), to_addr)
             else:
                 self._logger.warning("Could not send a Value Change Notification to an unknown Controller [%s]", to_id)
         else:
