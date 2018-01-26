@@ -67,11 +67,14 @@ class MyStompConnListener(stomp.ConnectionListener):
         if "content-type" in headers:
             self._logger.debug("Validating the STOMP Headers for 'content-type'")
 
-            if headers["media-type"] == "vnd.bbf.usp.msg":
-                self._logger.debug("STOMP Message has a proper 'media-type'")
-            else :
-                self._logger.warning("Incoming STOMP message contained an Unsupported Media-Type: %s",
-                                     headers["media-type"])
+            if "media-type" in headers:
+                if headers["media-type"] == "vnd.bbf.usp.msg":
+                    self._logger.debug("STOMP Message has a proper 'media-type'")
+                else:
+                    self._logger.warning("Incoming STOMP message contained an Unsupported Media-Type: %s",
+                                         headers["media-type"])
+            else:
+                self._logger.warning("Incoming STOMP message had no Content-Type")
 
             if headers["content-type"].startswith("application/octet-stream"):
                 self._logger.debug("STOMP Message has a proper 'content-type'")
