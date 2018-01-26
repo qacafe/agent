@@ -491,7 +491,6 @@ class UspRequestHandler(object):
         """Process an incoming GetSupportedProtocol and generate a GetSupportedProtocolResp"""
         resp_rec = usp_record.Record()
         resp = usp.Msg()
-        agent_versions_list = ["1.0"]
         self._logger.info("Processing a GetSupportedProtocol Request...")
 
         # Populate the Response's Header information
@@ -499,19 +498,14 @@ class UspRequestHandler(object):
 
         # Process the supported versions in the GetSupportedProtocol Request
 
-        version_compatible = False
-        for version in req.body.request.get_supported_protocol.controller_supported_protocol_versions:
-            if version == "1.0":
-                version_compatible = True
-                break
-
-        if version_compatible == False:
+        if not ("1.0" in req.body.request.get_supported_protocol.controller_supported_protocol_versions.split(",")):
             to_id = req_rec.from_id
             err_msg = "GetSupportedProtocol Failure: incompatible versions"
             usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
             resp = usp_err_msg.generate_error(9000, err_msg)
+            return resp_rec, resp
 
-        resp.body.response.get_supported_protocol_resp.agent_supported_protocol_versions.extend(agent_versions_list)
+        resp.body.response.get_supported_protocol_resp.agent_supported_protocol_versions = "1.0"
 
         return resp_rec, resp
 
