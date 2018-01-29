@@ -89,15 +89,15 @@ class UspErrMsg(object):
         self._to_id = to_id
         self._from_id = from_id
         self._msg = usp.Msg()
-        self._record = usp_record.Record()
+        self._rec = usp_record.Record()
 
 
     def _populate_header(self):
         """Populate the Header of the USP Message"""
         self._msg.header.msg_id = self._msg_id
-        self._record.version = "1.0"
-        self._record.to_id = self._to_id
-        self._record.from_id = self._from_id
+        self._rec.version = "1.0"
+        self._rec.to_id = self._to_id
+        self._rec.from_id = self._from_id
 
 
     def generate_error(self, error_code, error_message):
@@ -109,7 +109,7 @@ class UspErrMsg(object):
         self._msg.body.error.err_code = error_code
         self._msg.body.error.err_msg = error_message
 
-        return self._msg
+        return self._rec, self._msg
 
 
 

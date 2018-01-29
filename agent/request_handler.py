@@ -125,7 +125,7 @@ class UspRequestHandler(object):
         to_id = req_rec.from_id
         err_msg = "Message Failure: Request body does not match Header msg_type"
         usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
-        resp = usp_err_msg.generate_error(9000, err_msg)
+        resp_rec, resp = usp_err_msg.generate_error(9000, err_msg)
 
         if req.header.msg_type == usp.Header.GET:
             # Validate that the Request body matches the Header's msg_type
@@ -292,7 +292,7 @@ class UspRequestHandler(object):
         if len(set_failure_param_err_list) > 0:
             usp_err_msg = utils.UspErrMsg(req.header.msg_id, req_rec.from_id, self._id)
             err_msg = "Invalid Path Found, Allow Partial Updates = False :: Fail the entire Set"
-            resp = usp_err_msg.generate_error(9000, err_msg)
+            resp_rec, resp = usp_err_msg.generate_error(9000, err_msg)
             resp.body.error.param_errs.extend(set_failure_param_err_list)
         else:
             # Process the Updates against the database
@@ -477,13 +477,13 @@ class UspRequestHandler(object):
                 to_id = req_rec.from_id
                 err_msg = "Operate Failure: invalid command - {}".format(command)
                 usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
-                resp = usp_err_msg.generate_error(9000, err_msg)
+                resp_rec, resp = usp_err_msg.generate_error(9000, err_msg)
         else:
             # Unknown agent product class - return an Error
             to_id = req_rec.from_id
             err_msg = "Operate Failure: unknown product class - {}".format(product_class)
             usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
-            resp = usp_err_msg.generate_error(9000, err_msg)
+            resp_rec, resp = usp_err_msg.generate_error(9000, err_msg)
 
         return resp_rec, resp
 
@@ -502,7 +502,7 @@ class UspRequestHandler(object):
             to_id = req_rec.from_id
             err_msg = "GetSupportedProtocol Failure: incompatible versions"
             usp_err_msg = utils.UspErrMsg(req.header.msg_id, to_id, self._id)
-            resp = usp_err_msg.generate_error(9000, err_msg)
+            resp_rec, resp = usp_err_msg.generate_error(9000, err_msg)
             return resp_rec, resp
 
         resp.body.response.get_supported_protocol_resp.agent_supported_protocol_versions = "1.0"
