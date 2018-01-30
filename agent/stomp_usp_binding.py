@@ -81,7 +81,15 @@ class MyStompConnListener(stomp.ConnectionListener):
 
                 if "reply-to-dest" in headers:
                     self._logger.debug("STOMP Message has a 'reply-to-dest'")
-                    self._binding.push(body, headers["reply-to-dest"])
+                    if "destination" in headers:
+                        if headers["destination"] == self._binding._my_dest:
+                            self._logger.debug("STOMP Message has a proper 'destination'")
+                            self._binding.push(body, headers["reply-to-dest"])
+                        else:
+                            self._logger.warning("Incoming STOMP message had unsupported 'destination' header: %s",
+                                                 headers["destination"])
+                    else:
+                        self._logger.warning("Incoming STOMP message had no 'destination' header")
                 else:
                     self._logger.warning("Incoming STOMP message had no 'reply-to-dest' header")
             else:
