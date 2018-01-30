@@ -74,6 +74,7 @@ class UspRequestHandler(object):
         self._logger.debug("Incoming payload parsed via Protocol Buffers")
 
         if self._debug:
+            print("Incoming Record:\n{}".format(req_rec))
             print("Incoming Request:\n{}".format(req))
 
         try:
@@ -84,6 +85,7 @@ class UspRequestHandler(object):
 
             resp_rec, resp = self._process_request(req_rec, req)
             if self._debug:
+                print("Outgoing Record:\n{}".format(resp_rec))
                 print("Outgoing Response:\n{}".format(resp))
         except ProtocolValidationError as err:
             err_msg = "USP Message validation failed: {}".format(err)
