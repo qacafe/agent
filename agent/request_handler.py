@@ -331,7 +331,10 @@ class UspRequestHandler(object):
                     # If there were no Set Failure errors for the obj_to_update, oper_success
                     update_obj_result = usp.SetResp.UpdatedObjectResult()
                     update_obj_result.requested_path = obj_path_to_update
-                    update_obj_result.oper_status.oper_success.updated_inst_results.extend(update_inst_result_list)
+                    if len(update_inst_result.param_errs) == 0:
+                        update_obj_result.oper_status.oper_success.updated_inst_results.extend(update_inst_result_list)
+                    else:
+                        update_obj_result.oper_status.oper_failure.updated_inst_failures.extend(update_inst_result_list)
                     update_obj_result_list.append(update_obj_result)
                 else:
                     self._handle_set_param_errors(obj_path_to_update, allow_partial_updates,
