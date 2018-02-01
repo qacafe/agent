@@ -93,6 +93,7 @@ fi
 
 cd `dirname $0`
 
+ip link set $AGENT_INTERFACE up
 ip addr add $AGENT_IP/$AGENT_PLEN dev $AGENT_INTERFACE
 ip route add $CONTROLLER_IP via $AGENT_GW dev $AGENT_INTERFACE
 
@@ -102,6 +103,7 @@ trap ctrl_c TERM
 cleanup() {
     ip route del $CONTROLLER_IP via $AGENT_GW dev $AGENT_INTERFACE
     ip addr del $AGENT_IP/$AGENT_PLEN dev $AGENT_INTERFACE
+    ip link set $AGENT_INTERFACE down
 }
 
 ctrl_c() {
