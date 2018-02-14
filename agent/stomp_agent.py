@@ -206,7 +206,7 @@ class StompAgent(abstract_agent.AbstractAgent):
         self._logger.info("Connecting to %s", stomp_conn_ref)
 
         binding = stomp_usp_binding.StompUspBinding(host, port, username, password, virtual_host,
-                                                    outgoing_heartbeats, incoming_heartbeats)
+                                                    outgoing_heartbeats, incoming_heartbeats, self._endpoint_id)
 
         # Set the STOMP Connection Status to Enabled
         self._db.update(stomp_conn_ref + "Status", "Enabled")

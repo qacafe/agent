@@ -93,25 +93,28 @@ class MyStompConnListener(stomp.ConnectionListener):
 class StompUspBinding(generic_usp_binding.GenericUspBinding):
     """A STOMP to USP Binding"""
     def __init__(self, host="127.0.0.1", port=61613, username="admin", password="admin", virtual_host="/",
-                 outgoing_heartbeats=0, incoming_heartbeats=0, debug=False):
+                 outgoing_heartbeats=0, incoming_heartbeats=0, endpoint_id=None, debug=False):
         """Initialize the STOMP USP Binding for a USP Endpoint
             - 61613 is the default STOMP port for RabbitMQ installations"""
         generic_usp_binding.GenericUspBinding.__init__(self)
         self._host = host
         self._port = port
         self._debug = debug
+        self._my_id = endpoint_id
         self._my_dest = None
         self._username = username
         self._password = password
         self._listener = MyStompConnListener(self, debug)
         self._logger = logging.getLogger(self.__class__.__name__)
 
+        usp_headers = {"endpoint-id": self._my_id}
+
         # If we don't use auto_decode=False, then we get decode problems
         self._conn = stomp.Connection12([(host, port)], heartbeats=(outgoing_heartbeats, incoming_heartbeats),
                                         vhost=virtual_host, auto_decode=False)
         self._conn.set_listener("defaultListener", self._listener)
         self._conn.start()
-        self._conn.connect(username, password, wait=True)
+        self._conn.connect(username, password, wait=True, headers=usp_headers)
 
     def send_msg(self, serialized_msg, to_addr):
         """Send the ProtoBuf Serialized message to the provided STOMP address"""
