@@ -26,7 +26,7 @@
     "Device.LocalAgent.MTP.2.Protocol": "STOMP",
     "Device.LocalAgent.MTP.2.CoAP.URL": "",
     "Device.LocalAgent.MTP.2.STOMP.Reference": "Device.STOMP.Connection.1",
-    "Device.LocalAgent.MTP.2.STOMP.Destination": "/queue/00D09E-RPi_Test-T01",
+    "Device.LocalAgent.MTP.2.STOMP.Destination": "/foo/bar",
     "Device.LocalAgent.Controller.1.Enable": true,
     "Device.LocalAgent.Controller.1.Alias": "stomp",
     "Device.LocalAgent.Controller.1.EndpointID": "controller-stomp-johnb",
